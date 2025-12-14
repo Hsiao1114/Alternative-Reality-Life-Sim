@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>異世界人生模擬器</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定義樣式 */
+        .game-container {
+            height: 75vh;
+            min-height: 600px;
+        }
+        .chat-area {
+            height: 100%;
+        }
+        .chat-bubble {
+            max-width: 95%;
+            padding: 10px 15px;
+            border-radius: 16px;
+            margin-bottom: 8px;
+        }
+        .user-bubble {
+            background-color: #4f46e5; /* 靛藍色 */
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .ai-bubble {
+            background-color: #d1d5db; /* 淺灰色 */
+            color: #1f2937;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .context-panel {
+            background-color: #f3f4f6;
+            border-left: 4px solid #4f46e5;
+        }
+        /* 遊戲結束疊層 */
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+            border-radius: 0.75rem;
+            flex-direction: column;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center p-6 font-sans">
+    <div id="app" class="bg-white shadow-2xl rounded-xl w-full max-w-7xl flex flex-col p-8 space-y-6 relative">
+        <h1 class="text-3xl font-extrabold text-center text-gray-900 mb-4 border-b pb-2">🌌 異世界人生模擬器</h1>
+        
+        <!-- 階段容器 -->
+        <div id="stage-container" class="flex flex-col space-y-6">
+            
+            <!-- 階段 1: API Key 輸入 -->
+            <div id="stage-api-key" class="stage space-y-4 p-4 border rounded-lg shadow-md bg-white">
+                <h2 class="text-xl font-semibold text-gray-700">步驟 1: 輸入 API Key</h2>
+                <div class="flex space-x-4">
+                    <select id="api-type-select" 
+                            class="p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
+                        <option value="gemini">Gemini API Key</option>
+                        <option value="gpt">GPT (OpenAI) API Key</option>
+                    </select>
+                    <input type="password" id="api-key-input" placeholder="請輸入您的 API Key" 
+                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button onclick="handleApiKeyInput()" 
+                        class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition duration-200 shadow-lg">
+                    確認金鑰並繼續
+                </button>
+            </div>
+
+            <!-- 階段 2: 角色創建 -->
+            <div id="stage-create-char" class="stage hidden space-y-4 p-4 border rounded-lg shadow-md bg-white">
+                <h2 class="text-xl font-semibold text-gray-700">步驟 2: 創建你的異世界角色</h2>
+                <div class="space-y-3">
+                    <input type="text" id="player-name-input" placeholder="角色名稱 (例如: 艾瑞克)" 
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <textarea id="player-bio-input" rows="3" placeholder="你的出身背景與能力 (例如: 古代帝國中渴望學習魔法的農民，金錢 100，生命值 100)"
+                              class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <input type="text" id="player-goal-input" placeholder="你的主要人生目標 (例如: 尋找傳說中的失落魔法書)" 
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button onclick="handleCharCreation()" 
+                        class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition duration-200 shadow-lg">
+                    啟動世界模擬
+                </button>
+            </div>
+
+            <!-- 階段 3: 遊戲主介面 -->
+            <div id="stage-game" class="stage hidden game-container flex space-x-4">
+                
+                <!-- 左側：長期記憶 (世界紀錄) -->
+                <div class="w-1/3 p-4 rounded-xl context-panel overflow-y-auto">
+                    <h3 class="text-lg font-bold text-indigo-700 mb-3 border-b pb-2">📝 世界紀錄 (長期記憶)</h3>
+                    <!-- 時間顯示 -->
+                    <div class="text-center text-lg font-bold text-gray-700 p-2 border rounded-lg bg-yellow-100 mb-4">
+                        剩餘時間: <span id="time-display">--:--</span>
+                    </div>
+
+                    <div class="space-y-4 text-sm text-gray-700">
+                        <div>
+                            <p class="font-semibold text-gray-800">玩家狀態:</p>
+                            <pre id="context-bio" class="whitespace-pre-wrap text-xs bg-white p-2 rounded border"></pre>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-800">當前目標:</p>
+                            <p id="context-goal" class="text-xs italic"></p>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-800">歷史事件 (因果):</p>
+                            <pre id="context-events" class="whitespace-pre-wrap text-xs bg-white p-2 rounded border"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側：遊戲/聊天區 -->
+                <div class="w-2/3 flex flex-col space-y-4">
+                    <div id="chat-interface" class="chat-area p-4 rounded-xl bg-gray-100 flex flex-col overflow-y-auto space-y-2">
+                        <!-- AI 和玩家的對話將在這裡 -->
+                    </div>
+                    
+                    <!-- 輸入框 -->
+                    <div class="flex space-x-2">
+                        <input type="text" id="user-input" placeholder="輸入你的行動 (例如: 詢問村長關於魔法的事)" 
+                               class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-200">
+                        <button id="send-btn" onclick="sendMessage()" 
+                                class="p-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition duration-200 shadow-md disabled:bg-gray-400">
+                            行動
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲結束疊層 (預設隱藏) -->
+        <div id="game-over-overlay" class="game-over-overlay hidden p-10">
+            <h2 class="text-5xl font-extrabold text-red-500">GAME OVER</h2>
+            <p id="game-over-message" class="text-2xl font-semibold text-white mt-4 mb-8"></p>
+            <button onclick="window.location.reload()"
+                    class="p-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition duration-200 shadow-lg w-64">
+                重新開始異世界人生
+            </button>
+        </div>
+
+        <!-- 錯誤和提示訊息 -->
+        <p id="message-box" class="text-red-500 text-center hidden mt-4"></p>
+        <div id="loading-indicator" class="text-center text-gray-600 hidden mt-4 flex items-center justify-center">
+            <svg class="animate-spin h-5 w-5 mr-3 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            遊戲大師正在生成世界的回饋...
+        </div>
+    </div>
+
+    <script>
+        // --- 應用程式狀態 ---
+        let apiKey = '';
+        let apiType = 'gemini'; 
+        let userId = 'user-' + crypto.randomUUID(); 
+        let currentStage = 'api-key';
+        let isChatActive = false;
+        const BACKEND_URL = 'http://localhost:3000/api/simulate';
+        
+        let worldContext = {
+            player_bio: '',
+            current_goal: '',
+            world_events: '遊戲開始，一切尚未發生。',
+            time_remaining_sec: undefined, 
+        };
+
+        // --- DOM 元素快取 ---
+        const stageApiKey = document.getElementById('stage-api-key');
+        const stageCreateChar = document.getElementById('stage-create-char');
+        const stageGame = document.getElementById('stage-game');
+        
+        const apiTypeSelect = document.getElementById('api-type-select');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const playerNameInput = document.getElementById('player-name-input');
+        const playerBioInput = document.getElementById('player-bio-input');
+        const playerGoalInput = document.getElementById('player-goal-input');
+
+        const chatInterface = document.getElementById('chat-interface');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const messageBox = document.getElementById('message-box');
+        
+        const contextBio = document.getElementById('context-bio');
+        const contextGoal = document.getElementById('context-goal');
+        const contextEvents = document.getElementById('context-events');
+        
+        const gameOverOverlay = document.getElementById('game-over-overlay');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const timeDisplay = document.getElementById('time-display');
+
+
+        function setStage(stage) {
+            stageApiKey.classList.add('hidden');
+            stageCreateChar.classList.add('hidden');
+            stageGame.classList.add('hidden');
+            
+            switch (stage) {
+                case 'api-key':
+                    stageApiKey.classList.remove('hidden');
+                    break;
+                case 'create-char':
+                    stageCreateChar.classList.remove('hidden');
+                    break;
+                case 'game':
+                    stageGame.classList.remove('hidden');
+                    stageGame.classList.add('flex');
+                    isChatActive = true;
+                    updateContextPanel(worldContext);
+                    break;
+            }
+            currentStage = stage;
+            hideMessage();
+        }
+        
+        // 更新時間顯示邏輯
+        function updateTimeDisplay(remainingSec) {
+            const minutes = Math.floor(remainingSec / 60);
+            const seconds = remainingSec % 60;
+            const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            timeDisplay.textContent = timeStr;
+            
+            // 視覺警告
+            if (remainingSec <= 60 && remainingSec > 0) {
+                timeDisplay.parentNode.classList.add('text-red-600', 'animate-pulse');
+            } else {
+                timeDisplay.parentNode.classList.remove('text-red-600', 'animate-pulse');
+            }
+        }
+
+
+        function updateContextPanel(context) {
+            contextBio.textContent = context.player_bio;
+            contextGoal.textContent = context.current_goal;
+            contextEvents.textContent = context.world_events;
+            worldContext = context;
+        }
+
+        function handleApiKeyInput() {
+            const key = apiKeyInput.value.trim();
+            const type = apiTypeSelect.value;
+
+            if (key.length < 30) {
+                showMessage('API Key 似乎太短了，請檢查您的金鑰。', true);
+                return;
+            }
+            
+            apiKey = key;
+            apiType = type;
+            setStage('create-char');
+        }
+
+        function handleCharCreation() {
+            const name = playerNameInput.value.trim();
+            const bio = playerBioInput.value.trim();
+            const goal = playerGoalInput.value.trim();
+
+            if (!name || !bio || !goal) {
+                showMessage('請填寫所有角色資訊才能開始遊戲！', true);
+                return;
+            }
+
+            worldContext.player_bio = `角色名稱: ${name}。\n${bio}`;
+            worldContext.current_goal = goal;
+            worldContext.world_events = '遊戲開始，世界等待著你的行動。';
+            
+            setStage('game');
+            
+            // 首次向後端發送初始化請求
+            sendToBackend('INIT_CONTEXT', true);
+        }
+
+        function appendMessage(text, sender) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble', sender === 'user' ? 'user-bubble' : 'ai-bubble');
+            bubble.style.whiteSpace = 'pre-wrap';
+            bubble.textContent = text;
+            chatInterface.appendChild(bubble);
+            
+            chatInterface.scrollTop = chatInterface.scrollHeight;
+        }
+
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message || !isChatActive) return;
+
+            appendMessage(message, 'user');
+            userInput.value = ''; 
+            
+            sendToBackend(message, false);
+        }
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !sendBtn.disabled) {
+                sendMessage();
+            }
+        });
+
+        function showMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden', 'text-green-600', 'text-red-500');
+            messageBox.classList.add(isError ? 'text-red-500' : 'text-green-600');
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        function showLoading(show) {
+            loadingIndicator.classList.toggle('hidden', !show);
+            sendBtn.disabled = show;
+            userInput.disabled = show;
+        }
+
+        // --- 通訊與狀態更新 ---
+
+        async function sendToBackend(message, isInitial) {
+            showLoading(true);
+            hideMessage();
+
+            const payload = {
+                apiKey: apiKey,
+                apiType: apiType,
+                userId: userId,
+                worldContext: worldContext, 
+                message: message,
+            };
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `後端回傳錯誤 (Status: ${response.status})`);
+                }
+
+                const data = await response.json();
+                const jsonReply = data.reply; 
+                
+                if (isInitial) {
+                    appendMessage(`遊戲開始！${worldContext.player_bio.split('\n')[0]} 正在一個充滿無限可能的異世界中。你的第一個行動是什麼？`, 'ai');
+                } else {
+                    // 使用 JSON 中的 narrative 字段作為故事文本
+                    appendMessage(jsonReply.narrative || "[AI 敘事錯誤: 缺少 narrative 字段]", 'ai');
+                }
+                
+                // *** 檢查結構化成就標誌 ***
+                if (jsonReply.achievement_unlocked === true) {
+                    showMessage('🏆 恭喜！你完成了遊戲的一個重大階段或核心目標！', false);
+                }
+
+                // *** 檢查 Game Over 狀態 ***
+                if (jsonReply.game_state_change && jsonReply.game_state_change.game_over === true) {
+                    isChatActive = false;
+                    userInput.disabled = true;
+                    sendBtn.disabled = true;
+                    
+                    gameOverMessage.textContent = jsonReply.game_state_change.critical_message || "世界模擬終結。";
+                    gameOverOverlay.classList.remove('hidden');
+                    
+                    // 確保時間顯示也停止
+                    updateTimeDisplay(0); 
+                    
+                    showMessage('遊戲結束。請重新整理頁面開始新的旅程。', true);
+                }
+
+
+                // *** 更新長期記憶顯示 and Time ***
+                if (data.updatedContext) {
+                    updateContextPanel(data.updatedContext);
+                    
+                    // 更新時間顯示
+                    if (data.updatedContext.time_remaining_sec !== undefined) {
+                         const remaining = data.updatedContext.time_remaining_sec;
+                         updateTimeDisplay(remaining);
+                    }
+                }
+
+            } catch (error) {
+                console.error('API 呼叫失敗:', error);
+                if (error.message.includes("Failed to fetch")) {
+                     showMessage('連線錯誤：請確認後端伺服器 (Node.js) 仍在執行中。', true);
+                } else {
+                     showMessage(`通訊失敗，請檢查 API Key 或錯誤日誌。錯誤: ${error.message}`, true);
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        window.onload = function() {
+            setStage(currentStage);
+        };
+
+    </script>
+</body>
+</html>
